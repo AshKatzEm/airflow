@@ -48,7 +48,7 @@ from typing import Annotated, Literal, Union
 from uuid import UUID
 
 from fastapi import Body
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_serializer
 
 from airflow.sdk.api.datamodels._generated import (
     AssetResponse,
@@ -228,6 +228,19 @@ class DeferTask(TIDeferredStatePayload):
     """Update a task instance state to deferred."""
 
     type: Literal["DeferTask"] = "DeferTask"
+
+    @field_serializer("trigger_kwargs", "kwargs", check_fields=True)
+    def _serde_kwarg_fields(self, val, _info):
+        from airflow.serialization.serialized_objects import BaseSerialization
+
+        if not isinstance(val, dict):
+            # None, or an encrypted string
+            return val
+
+        if val.keys() == {"__type", "__var"}:
+            # Already encoded.
+            return val
+        return BaseSerialization.serialize(val or {})
 
 
 class RescheduleTask(TIRescheduleStatePayload):

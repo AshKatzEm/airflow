@@ -268,29 +268,34 @@ class TestTaskInstanceOperations:
         # Simulate a successful response from the server that defers a task
         ti_id = uuid6.uuid7()
 
+        msg = DeferTask(
+            classpath="airflow.providers.standard.triggers.temporal.DateTimeTrigger",
+            method_name="execute_complete",
+            trigger_kwargs={
+                "__type": "dict",
+                "__var": {
+                    "moment": {"__type": "datetime", "__var": 1730982899.0},
+                    "end_from_trigger": False,
+                },
+            },
+            kwargs={"__type": "dict", "__var": {}},
+        )
+
         def handle_request(request: httpx.Request) -> httpx.Response:
             if request.url.path == f"/task-instances/{ti_id}/state":
                 actual_body = json.loads(request.read())
                 assert actual_body["state"] == "deferred"
-                assert actual_body["trigger_kwargs"] == {
-                    "moment": "2024-11-07T12:34:59Z",
-                    "end_from_trigger": False,
-                }
+                assert actual_body["trigger_kwargs"] == msg.trigger_kwargs
                 assert (
                     actual_body["classpath"] == "airflow.providers.standard.triggers.temporal.DateTimeTrigger"
                 )
-                assert actual_body["next_method"] == "execute_complete"
+                assert actual_body["method_name"] == "execute_complete"
                 return httpx.Response(
                     status_code=204,
                 )
             return httpx.Response(status_code=400, json={"detail": "Bad Request"})
 
         client = make_client(transport=httpx.MockTransport(handle_request))
-        msg = DeferTask(
-            classpath="airflow.providers.standard.triggers.temporal.DateTimeTrigger",
-            trigger_kwargs={"moment": "2024-11-07T12:34:59Z", "end_from_trigger": False},
-            next_method="execute_complete",
-        )
         client.task_instances.defer(ti_id, msg)
 
     def test_task_instance_reschedule(self):
